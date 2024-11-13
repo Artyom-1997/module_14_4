@@ -1,0 +1,35 @@
+import sqlite3
+
+
+def initiate_db(db_name='products.db'):
+    """Создает таблицу Products, если она еще не создана."""
+    connection = sqlite3.connect(db_name)  # Подключаемся к базе данных
+    cursor = connection.cursor()  # Создаем курсор для выполнения SQL запросов
+
+    # SQL запрос для создания таблицы
+    create_table_query = """
+    CREATE TABLE IF NOT EXISTS Products (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        title TEXT NOT NULL,
+        description TEXT,
+        price INTEGER NOT NULL
+    );
+    """
+
+    cursor.execute(create_table_query)  # Выполняем SQL запрос
+    connection.commit()  # Сохраняем изменения
+    connection.close()  # Закрываем соединение с базой данных
+
+
+def get_all_products(db_name='products.db'):
+    """Возвращает все записи из таблицы Products."""
+    connection = sqlite3.connect(db_name)  # Подключаемся к базе данных
+    cursor = connection.cursor()  # Создаем курсор для выполнения SQL запросов
+
+    # SQL запрос для получения всех продуктов
+    select_query = "SELECT * FROM Products;"
+    cursor.execute(select_query)  # Выполняем SQL запрос
+    products = cursor.fetchall()  # Получаем все записи
+
+    connection.close()  # Закрываем соединение с базой данных
+    return products

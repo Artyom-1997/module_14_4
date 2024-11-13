@@ -1,0 +1,138 @@
+from aiogram import types
+from aiogram.dispatcher import FSMContext
+from aiogram.contrib.fsm_storage.memory import MemoryStorage
+from aiogram import Bot, Dispatcher, executor
+from states import States  # Убедитесь, что вы импортируете необходимые состояния
+
+
+# Создаем экземпляр бота и диспетчера
+bot = Bot(token='YOUR_BOT_TOKEN')
+storage = MemoryStorage()
+dp = Dispatcher(bot, storage=storage)
+
+
+# Определяем состояния
+class UserState(States):
+    age = State()
+    growth = State()
+    weight = State()
+
+
+# Создаем клавиатуру
+inline_keyboard = types.InlineKeyboardMarkup(row_width=1)
+calculate_button = types.InlineKeyboardButton(
+    text='Рассчитать норму калорий', callback_data='calories')
+formulas_button = types.InlineKeyboardButton(
+    text='Формулы расчёта', callback_data='formulas')
+buy_button = types.InlineKeyboardButton(text='Купить', callback_data='buy')
+inline_keyboard.add(calculate_button, formulas_button, buy_button)
+
+
+# Функция для отправки клавиатуры при старте
+@dp.message_handler(commands=['start'])
+async def start(message: types.Message):
+    await message.answer(
+        "Добро пожаловать! Выберите действие:", reply_markup=inline_keyboard)
+
+
+# Функция для вывода меню с опциями
+@dp.message_handler(lambda message: message.text == 'Рассчитать')
+async def main_menu(message: types.Message):
+    await message.answer("Выберите опцию:", reply_markup=inline_keyboard)
+
+
+# Функция, которая реагирует на Inline-кнопку "Формулы расчёта"
+@dp.callback_query_handler(lambda call: call.data == 'formulas')
+async def get_formulas(call: types.CallbackQuery):
+    await call.message.answer(
+        "Формула Миффлина - Сан Жеора:\nBMR = 10 * вес(кг) + 6.25 * рост(см) - 5 * возраст(лет) + 5 (для мужчин)"
+    )
+    await call.answer()
+
+
+# Функция для установки возраста, реагирующая на кнопку "Рассчитать"
+@dp.callback_query_handler(lambda call: call.data == 'calories')
+async def set_age(call: types.CallbackQuery):
+    await call.message.answer("Введите свой возраст:")
+    await UserState.age.set()
+
+
+# Функция для установки роста
+@dp.message_handler(state=UserState.age)
+async def set_growth(message: types.Message, state: FSMContext):
+    await state.update_data(age=message.text)
+    await message.answer("Введите свой рост (см):")
+    await UserState.growth.set()
+
+
+# Функция для установки веса
+@dp.message_handler(state=UserState.growth)
+async def set_weight(message: types.Message, state: FSMContext):
+    await state.update_data(growth=message.text)
+    await message.answer("Введите свой вес (кг):")
+    await UserState.weight.set()
+
+
+# Функция для отправки расчета калорий
+@dp.message_handler(state=UserState.weight)
+async def send_calories(message: types.Message, state: FSMContext):
+    await state.update_data(weight=message.text)
+
+    # Получаем данные из состояния
+    data = await state.get_data()
+    age = int(data['age'])
+    growth = int(data['growth'])
+    weight = int(data['weight'])
+
+    # Формула Миффлина - Сан Жеора (для мужчин)
+    bmr = 10 * weight + 6.25 * growth - 5 * age + 5
+    await message.answer(f"Ваша норма калорий: {bmr} ккал в день.")
+
+    # Завершение машины состояний
+    await state.finish()
+
+
+# Функция для получения всех продуктов
+async def get_all_products():
+    return [
+        {"name": "Product1", "description": "описание 1", "price": 100},
+        {"name": "Product2", "description": "описание 2", "price": 200},
+        {"name": "Product3", "description": "описание 3", "price": 300},
+        {"name": "Product4", "description": "описание 4", "price": 400},
+    ]
+
+
+# Функция, которая реагирует на кнопку "Купить"
+@dp.callback_query_handler(lambda call: call.data == 'buy')
+async def get_buying_list(call: types.CallbackQuery):
+    products = await get_all_products()
+
+    for product in products:
+        await call.message.answer(
+            f"Название: {product['name']} | Описание: {product['description']} | Цена: {product['price']} \n"
+        )
+
+    inline_keyboard_products = types.InlineKeyboardMarkup(row_width=1)
+    for product in products:
+        product_button = types.InlineKeyboardButton(
+            text=product['name'], callback_data="product_buying")
+        inline_keyboard_products.add(product_button)
+
+    await call.message.answer("Выберите продукт для покупки:", reply_markup=inline_keyboard_products)
+
+
+# Callback хэндлер для подтверждения покупки
+@dp.callback_query_handler(lambda call: call.data == 'product_buying')
+async def send_confirm_message(call: types.CallbackQuery):
+    await call.message.answer("Вы успешно приобрели продукт!")
+    await call.answer()
+
+
+# Функция, которая реагирует на кнопку "Информация"
+@dp.message_handler(lambda message: message.text == 'Информация')
+async def information(message: types.Message):
+    await message.answer("Этот бот поможет вам рассчитать свою норму калорий для поддержания веса.")
+
+
+if __name__ == '__main__':
+    executor.start_polling(dp, skip_updates=True)
